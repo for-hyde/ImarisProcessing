@@ -4,6 +4,7 @@ library(Rtsne)
 library(ggplot2)
 library(dplyr)
 library(stats)  # For PCA
+library(tcltk)
 
 # Define the UI
 ui <- fluidPage(
@@ -11,11 +12,13 @@ ui <- fluidPage(
   
   sidebarLayout(
     sidebarPanel(
-      textInput("dirPath", "Enter the path to the directory:", value = ""),
-      selectInput("method", "Choose a reduction method:", 
-                  choices = c("UMAP", "t-SNE", "PCA")),
-      actionButton("process", "Process CSV Files"),
-      textOutput("status")
+      #Select File(s)
+      
+      #Display files
+      
+      #Select cell features
+      
+      #
     ),
     
     mainPanel(
