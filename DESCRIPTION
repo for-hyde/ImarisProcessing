@@ -1,0 +1,15 @@
+Package: ImaPro
+Title: Imaris Data Processing
+Version: 1.0.0
+Authors@R: person("Forrest", email = "forrest.hyde@stud-uni.heidelberg.de", role = "Intern")
+Description: A Shiny application for CSV processing and dimensionality reduction.
+Depends:
+    R (>= 4.0)
+Imports:
+    shiny,
+    umap,
+    Rtsne,
+    ggplot2,
+    dplyr
+Encoding: UTF-8
+LazyData: true
