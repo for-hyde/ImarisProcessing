@@ -1,0 +1,80 @@
+---
+title: "Untitled"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    source_code: embed
+runtime: shiny
+
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(umap)
+library(Rtsne)
+library(ggplot2)
+library(dplyr)
+library(stats)  # For PCA
+library(tcltk)
+library(DT) # Data frame as table manipulation.
+library(shinyFiles)
+
+# Define a reactive value to store the selected folder
+selected_folder <- reactiveVal(NULL)
+
+# Function to get folder contents
+list_folder_contents <- function(folder) {
+  if (is.null(folder) || folder == "") return(NULL)
+  files <- list.files(folder, pattern = "\\.csv$", recursive = TRUE, full.names = TRUE)
+  subfolders <- list.dirs(folder, recursive = TRUE)
+  return(list(csv_files = files, subfolders = subfolders))
+}
+```
+
+Column {data-width=250 .sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+# Button to allow the user to select a folder
+shinyDirButton("folder", "Select Folder", "Please select a folder")
+
+# Observe folder selection and store the path
+observe({
+  volumes <- c(Home = "~", "C:/" = "C:/", "D:/" = "D:/")
+  shinyDirChoose(input, "folder", roots = volumes, session = session)
+  folder_path <- parseDirPath(volumes, input$folder)
+  if (length(folder_path) > 0) {
+    selected_folder(folder_path)
+  }
+})
+
+# Display selected folder path
+output$folder_path_display <- renderText({
+  req(selected_folder())
+  paste("Selected folder:", selected_folder())
+})
+
+textOutput("folder_path_display")
+
+```
+
+Column {data-width=350 .tabset}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+
+
+```
+
+### Chart C
+
+```{r}
+
+```
+
+
+
