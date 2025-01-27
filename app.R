@@ -14,11 +14,16 @@ ui <- fluidPage(
     sidebarPanel(
       #Select File(s)
       
+      
       #Display files
       
-      #Select cell features
+      #List identified features
       
-      #
+      #Select cell condition
+      
+      #Give overview for each condition identified. 
+      
+      #Choose plot to determine
     ),
     
     mainPanel(
