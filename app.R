@@ -5,6 +5,7 @@ library(ggplot2)
 library(dplyr)
 library(stats)  # For PCA
 library(tcltk)
+library(shinyFiles)
 
 # Define the UI
 ui <- fluidPage(
@@ -12,22 +13,23 @@ ui <- fluidPage(
   
   sidebarLayout(
     sidebarPanel(
-      #Select File(s)
       
-      
-      #Display files
+      #Select Folder
       
       #List identified features
       
       #Select cell condition
       
-      #Give overview for each condition identified. 
+      #Give overview for each condition identification 
       
       #Choose plot to determine
     ),
     
     mainPanel(
+      # Data table of compiled dataframe
       plotOutput("dimPlot")
+      
+      
     )
   )
 )
