@@ -60,12 +60,25 @@ textOutput("folder_path_display")
 
 ```
 
-Column {data-width=350 .tabset}
+Column {data-width=350}
 -----------------------------------------------------------------------
 
 ### Chart B
 
 ```{r}
+output$csv_files_table <- renderTable({
+  req(selected_folder())
+  folder <- selected_folder()
+  files_info <- list_folder_contents(folder)
+  
+  if (length(files_info$csv_files) == 0) {
+    return(data.frame(File = "No CSV files found"))
+  }
+  
+  data.frame(File_Path = files_info$csv_files, stringsAsFactors = FALSE)
+})
+
+tableOutput("csv_files_table")
 
 
 ```
@@ -73,6 +86,19 @@ Column {data-width=350 .tabset}
 ### Chart C
 
 ```{r}
+output$subfolders_table <- renderTable({
+  req(selected_folder())
+  folder <- selected_folder()
+  files_info <- list_folder_contents(folder)
+
+  if (length(files_info$subfolders) == 0) {
+    return(data.frame(Subfolder = "No subfolders found"))
+  }
+
+  data.frame(Subfolder_Path = files_info$subfolders, stringsAsFactors = FALSE)
+})
+
+tableOutput("subfolders_table")
 
 ```
 
