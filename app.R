@@ -6,6 +6,7 @@ library(dplyr)
 library(stats)  # For PCA
 library(tcltk)
 library(shinyFiles)
+library(DT)
 
 # Define the UI
 ui <- fluidPage(
@@ -29,7 +30,7 @@ ui <- fluidPage(
     
     mainPanel(
       # Data table of compiled dataframe
-      tableOutput("data_table"),
+      DTOutput("data_table"),
       # Output plot
       plotOutput("dimPlot")
       
@@ -80,23 +81,59 @@ server <- function(input, output, session) {
       #Append the csv_files list with the csv_files for the iteration of the subfolder. 
       csv_files <- c(csv_files, 
                      list.files(subfolder, pattern = "*.csv", full.names = TRUE)
-      )}
+      )
+    }
     #Remove overview csv files. (different size than others)
     csv_files <- csv_files[!grepl("Cells_\\d+_Overall\\.csv", csv_files)]
     
     #Generate features based on csv files. 
     features <- gsub(".*/Cells_\\d+_(.*)\\.csv", "\\1", csv_files)
-    unique(features)
+    features <- unique(features)
     found_features(features)
     
-    
-    
-    #test_text(features)
-    
-    
-    
-    
-    }
+
+    #Parse CSV_file
+    #Create empty dataframe.
+    result_df <- data.frame()
+    #Create working list
+    temp_list <- list()
+    #incrementer set to 0
+    counter <- 0
+    #Iterate csv files
+    for(i in seq_along(csv_files)){
+      #Read CSV
+      temp_data <- read.csv(csv_files[i], skip = 3)
+      #Select feature from 
+      feature = features[counter + 1]
+      
+      #Extract values from first column as feature
+      temp_list[[feature]] <- temp_data[[1]]
+      
+      #IDcolumn
+      id_col <- temp_data[6]
+      
+      #
+      orig_name <- temp_data[['Original.Image.Name']]
+      
+      wells <- orig_name
+      
+      condition <- orig_name
+      
+      temp_list[["Well_ID"]] <- paste(wells,id_col, sep = "_")
+      
+      temp_list[["Condition"]] <- condition
+      
+      counter <- counter + 1
+      
+      if(counter >= length(features)){
+        temp_df <- as.data.frame(temp_list)
+        result_df <- rbind(result_df, temp_df)
+        temp_list <- list()
+        counter <- 0 
+      }
+        }
+    structured_data(result_df)
+  }
     )
 
     #Extract feature values and cell ids
@@ -121,8 +158,9 @@ server <- function(input, output, session) {
     req(found_features())
     paste("Found feature:\n", found_features(), "\n")
   })
-  output$data_table <- renderTable({
-    req(structured_data)
+  output$data_table <- renderDT({
+    req(structured_data())
+    datatable(structured_data(),options = list(pageLength= 10, autowidth = TRUE))
   })
   output$test <- renderText({
     req(test_text())
