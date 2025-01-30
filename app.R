@@ -85,19 +85,20 @@ server <- function(input, output, session) {
     csv_files <- csv_files[!grepl("Cells_\\d+_Overall\\.csv", csv_files)]
     
     #Generate features based on csv files. 
+    features <- gsub(".*/Cells_\\d+_(.*)\\.csv", "\\1", csv_files)
+    unique(features)
+    found_features(features)
     
     
-    test_text(csv_files)
+    
+    #test_text(features)
     
     
     
     
     }
     )
-  #Generate features based on csv files. 
-  #Parse CSV files. 
-    # Extract final column of the first row. -> list condition inputs available.
-    # List well inputs available. 
+
     #Extract feature values and cell ids
     #Append features and values to list
   #Generate Dataframe
@@ -109,7 +110,6 @@ server <- function(input, output, session) {
   # Reaction to selection from condition input
 #-------------------------------------------------------------------------------
   #Alter the condition column of the dataframe to be match the pattern shown. 
-  
 
   
   # Reaction to selection of well input
@@ -119,7 +119,7 @@ server <- function(input, output, session) {
   # 
   output$features <- renderText({
     req(found_features())
-    paste("Found features:\n", found_features())
+    paste("Found feature:\n", found_features(), "\n")
   })
   output$data_table <- renderTable({
     req(structured_data)
