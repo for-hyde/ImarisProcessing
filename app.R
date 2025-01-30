@@ -69,19 +69,31 @@ server <- function(input, output, session) {
     folder_path <- parseDirPath(volumes, input$folder)
     #Ensure the folder_path is valid
     if(!is.null(folder_path)){
+    #Create subfolders list of all folders, including main directory.
       subfolders <- list.dirs(folder_path)
     }
+    
+    #Create empty character vector for of csv_files. 
     csv_files <- c()
+    #Iterate through all directories from subfolders list. 
     for(subfolder in subfolders){
+      #Append the csv_files list with the csv_files for the iteration of the subfolder. 
       csv_files <- c(csv_files, 
                      list.files(subfolder, pattern = "*.csv", full.names = TRUE)
       )}
+    #Remove overview csv files. (different size than others)
+    csv_files <- csv_files[!grepl("Cells_\\d+_Overall\\.csv", csv_files)]
+    
+    #Generate features based on csv files. 
+    
+    
     test_text(csv_files)
-  
+    
+    
+    
+    
     }
     )
-  #For all identified folders, scan for csv files. 
-  #Remove overview csv files. 
   #Generate features based on csv files. 
   #Parse CSV files. 
     # Extract final column of the first row. -> list condition inputs available.
