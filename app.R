@@ -21,7 +21,7 @@ ui <- fluidPage(
       #List identified features
       verbatimTextOutput("features"),
       #Select cell condition
-      selectInput("condition_input", "Select text showing the codition", choices = NULL),
+      selectInput("condition_input", "Select text that corresponds to the condition.", choices = NULL),
       #Select well documentation 
       selectInput("well_input","Select text showing well", choices = NULL),
       #Choose plot to determine
@@ -133,14 +133,10 @@ server <- function(input, output, session) {
       }
         }
     structured_data(result_df)
-  }
-    )
-
-    #Extract feature values and cell ids
-    #Append features and values to list
-  #Generate Dataframe
-  
-  
+    
+    #Use the first entry in the well and condition field to select the data. 
+    #samples <- NA
+})
   
   
   
@@ -148,6 +144,35 @@ server <- function(input, output, session) {
 #-------------------------------------------------------------------------------
   #Alter the condition column of the dataframe to be match the pattern shown. 
 
+  observe({
+    req(structured_data())  # Ensure the dataframe exists
+    
+    cond <- structured_data()$Condition  # Extract condition column
+    
+    if (length(cond) == 0 || all(is.na(cond))) {
+      return()  # Exit if there are no valid Well_ID entries
+    }
+    
+    # Extract first non-NA entry safely
+    first_cond <- na.omit(cond)[1]
+    
+    if (!is.na(first_cond) && nzchar(first_cond)) {
+      # Split by "_"
+      conditions_list <- unique(unlist(strsplit(first_cond, "_")))
+      
+      # Update the reactive conditions list
+      conditions(conditions_list)
+    }
+  })
+  
+  observe({
+    req(conditions())
+    
+    updateSelectInput(session, "condition_input", choices = conditions())
+    
+  })
+  
+  
   
   # Reaction to selection of well input
 #-------------------------------------------------------------------------------
@@ -166,7 +191,6 @@ server <- function(input, output, session) {
     req(test_text())
     paste("Value from test:", test_text())
   })
-  
   
   }
 
