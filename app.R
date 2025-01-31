@@ -18,8 +18,8 @@ ui <- fluidPage(
       shinyDirButton("folder", "Select Folder", "Choose a folder"),
       #Debugging
       textOutput("test"),
-      #List identified features
-      verbatimTextOutput("features"),
+      #List identified features to select
+      checkboxGroupInput("features", "Select Features to analyze:", choices = NULL),
       #Select cell condition
       textInput("condition_input_text", "Enter a condition:", ""),
       #actionButton for text input
@@ -38,7 +38,7 @@ ui <- fluidPage(
       # Data table of compiled dataframe
       DTOutput("data_table"),
       # Output plot
-      plotOutput("dimPlot")
+      uiOutput("dynamicPlot")
       
       
     )
@@ -97,6 +97,7 @@ server <- function(input, output, session) {
     #Generate features based on csv files. 
     features <- gsub(".*/Cells_\\d+_(.*)\\.csv", "\\1", csv_files)
     features <- unique(features)
+
     found_features(features)
     
 
@@ -127,9 +128,11 @@ server <- function(input, output, session) {
       
       condition <- orig_name
       
-      temp_list[["Well_ID"]] <- paste(wells,id_col, sep = "_")
+      temp_list[["Well_ID"]] <- wells
       
       temp_list[["Condition"]] <- condition
+      
+      temp_list[["ID"]] <- id_col
       
       counter <- counter + 1
       
@@ -146,6 +149,17 @@ server <- function(input, output, session) {
     #Use the first entry in the well and condition field to select the data. 
     #samples <- NA
 })
+  
+  observe({
+    req(found_features())
+    
+    updateCheckboxGroupInput(
+      session, 
+      "features", 
+      choices = found_features(),
+      selected = found_features())
+    
+  })
   
   
   
@@ -234,6 +248,8 @@ server <- function(input, output, session) {
     # Update Condition column
     df$Condition <- extracted_conditions
     
+    df <- df[df$Condition != "" & !is.na(df$Condition), ]
+    
     structured_data(df)  # Update the dataframe
   })
   
@@ -310,15 +326,73 @@ server <- function(input, output, session) {
     # Update the structured dataframe
     structured_data(df)
   })
+  #Creation of the PCA, UMAP, and t-SNE graphs. 
+#-------------------------------------------------------------------------------
+  # Reactive trigger for generating the plot only when "Confirm" is clicked
+  observeEvent(input$confirm, {
+    #Requires data_frame
+    req(structured_data())
+    
+    df <- structured_data()
+    
+    # Remove ID column if present
+    if ("ID" %in% colnames(df)) {
+      df <- df[, !(colnames(df) %in% "ID")]
+    }
+    
+    # Keep only numeric columns
+    numeric_cols <- sapply(df, is.numeric)
+    df_numeric <- df[, numeric_cols, drop = FALSE]
+    
+    # Remove constant columns
+    df_numeric <- df_numeric[, apply(df_numeric, 2, function(x) length(unique(x)) > 1), drop = FALSE]
+    
+    
+    
+    # Ensure valid data
+    if (ncol(df_numeric) < 2) {
+      output$dynamicPlot <- renderUI({
+        tags$p("Not enough numeric data for dimensionality reduction")
+      })
+      return()
+    }
+    
+    # Perform dimensionality reduction
+    result_df <- NULL
+    if (input$chart == "PCA") {
+      pca_result <- prcomp(df_numeric, center = TRUE, scale. = TRUE)
+      result_df <- as.data.frame(pca_result$x[, 1:2])
+    } else if (input$chart == "t-SNE") {
+      tsne_result <- Rtsne(df_numeric, dims = 2, perplexity = 30, verbose = FALSE, max_iter = 500)
+      result_df <- as.data.frame(tsne_result$Y)
+    } else if (input$chart == "UMAP") {
+      umap_result <- umap(df_numeric)
+      result_df <- as.data.frame(umap_result$layout)
+    }
+    
+    colnames(result_df) <- c("Dim1", "Dim2")
+    result_df$Condition <- if ("Condition" %in% colnames(df)) df$Condition else "Unknown"
+    
+    # Dynamically render the plot output UI
+    output$dynamicPlot <- renderUI({
+      plotOutput("dimPlot", height = "100%", width = "100%")
+    })
+    
+    # Render the plot
+    output$dimPlot <- renderPlot({
+      ggplot(result_df, aes(x = Dim1, y = Dim2, color = Condition)) +
+        geom_point(size = 2, alpha = 0.7) +
+        theme_minimal() +
+        labs(title = paste(input$chart, "Projection"), x = "Dimension 1", y = "Dimension 2") +
+        theme(legend.position = "right")
+    }, height = function() session$clientData$output_dimPlot_width * 0.75)
+  })
   
-  
+  #Outputs defined
+#-------------------------------------------------------------------------------
   
   
   # 
-  output$features <- renderText({
-    req(found_features())
-    paste("Found feature:\n", found_features(), "\n")
-  })
   output$data_table <- renderDT({
     req(structured_data())
     datatable(structured_data(),options = list(pageLength= 10, autowidth = TRUE))
@@ -327,6 +401,8 @@ server <- function(input, output, session) {
     req(test_text())
     paste("Value from test:", test_text())
   })
+
+  
   
   }
 
