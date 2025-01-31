@@ -21,7 +21,11 @@ ui <- fluidPage(
       #List identified features
       verbatimTextOutput("features"),
       #Select cell condition
-      selectInput("condition_input", "Select text that corresponds to the condition.", choices = NULL),
+      textInput("condition_input_text", "Enter a condition:", ""),
+      #actionButton for text input
+      actionButton("add_condition","Add Condition"),
+      uiOutput("condition_checkboxes"),
+      
       #Select well documentation 
       selectInput("well_input","Select text showing well", choices = NULL),
       #Choose plot to determine
@@ -48,6 +52,8 @@ server <- function(input, output, session) {
   #Defines drives available to use. May need to be updated. 
   volumes <- c(Home = fs::path_home(), "C:" = "C:/", "D:" = "D:/", "Z:" = "Z:/")
   
+  master_data <- reactiveVal(NULL)
+  
   #Data for the dataframe, set to NULL until structured data generated. 
   structured_data <- reactiveVal(NULL)
   #Data for found features, Updated after initial parsing of csv files. 
@@ -55,8 +61,8 @@ server <- function(input, output, session) {
   
   #Reactive value to be updated after creation of df
   wells <- reactiveVal(NULL)
-  #Reavative value for conditions to be updated after creation of df
-  conditions <- reactiveVal(NULL)
+  #Reactive value to store selected conditions
+  selected_conditions <- reactiveVal(character())
   
   test_text <- reactiveVal(NULL)
   
@@ -135,6 +141,7 @@ server <- function(input, output, session) {
       }
         }
     structured_data(result_df)
+    master_data(result_df)
     
     #Use the first entry in the well and condition field to select the data. 
     #samples <- NA
@@ -144,70 +151,90 @@ server <- function(input, output, session) {
   
   # Reaction to selection from condition input
 #-------------------------------------------------------------------------------
-  #Alter the condition column of the dataframe to be match the pattern shown. 
-
-  observe({
-    req(structured_data())  # Ensure the dataframe exists
+  
+  # When "Add Condition" button is clicked
+  observeEvent(input$add_condition, {
+    req(input$condition_input_text)  # Ensure user entered a value
     
-    cond <- structured_data()$Condition  # Extract condition column
+    # Get current selected conditions
+    current_conditions <- selected_conditions()
     
-    if (length(cond) == 0 || all(is.na(cond))) {
-      return()  # Exit if there are no valid Well_ID entries
+    # Avoid adding duplicates
+    if (!(input$condition_input_text %in% current_conditions)) {
+      selected_conditions(c(current_conditions, input$condition_input_text))
+    }
+  })
+  
+  # Render dynamic checkboxes for selected conditions
+  output$condition_checkboxes <- renderUI({
+    req(selected_conditions())  # Ensure there are selected conditions
+    checkboxGroupInput("condition_input", "Select conditions to use:", choices = selected_conditions(), selected = selected_conditions())
+  })
+  
+  
+  
+  # Render dynamic checkboxes for selected conditions
+  observeEvent(input$confirm, {
+    req(master_data(), input$condition_input)  # Ensure data and selection exist
+    
+    df <- master_data()  # Retrieve current dataframe
+    
+    # Ensure "Condition" column exists
+    if (!"Condition" %in% colnames(df)) {
+      warning("Column 'Condition' not found in the dataframe!")
+      return()
     }
     
-    # Extract first non-NA entry safely
-    first_cond <- na.omit(cond)[1]
+    # Extract all condition strings
+    conds <- df$Condition
     
-    if (!is.na(first_cond) && nzchar(first_cond)) {
-      # Split by "_"
-      conditions_list <- unique(unlist(strsplit(first_cond, "_")))
+    # Ensure there are valid conditions to process
+    if (length(conds) == 0 || all(is.na(conds))) {
+      warning("No valid conditions found in the dataframe!")
+      return()
+    }
+    
+    # Initialize new condition column
+    extracted_conditions <- character(length(conds))
+    
+    for (i in seq_along(conds)) {
+      if (is.na(conds[i])) next  # Skip NA values
       
-      # Update the reactive conditions list
-      conditions(conditions_list)
-    }
-  })
-  
-  observe({
-    req(conditions())
-    
-    updateSelectInput(session, "condition_input", choices = conditions())
-    
-  })
-  
-  observeEvent(input$confirm,{
-    req(structured_data(), input$condition_input)
-    df <- structured_data()
-    
-    if(!"Condition" %in% names(df)) return()
-    
-    sample_condition <- na.omit(df$Condition)[1]
-    
-    condition_parts <- unlist(strsplit(sample_condition, "_"))
-    
-    selected_index <- match(input$condition_input, condition_parts)
-    
-    prefix <- ifelse(selected_index > 1, condition_parts[selected_index - 1], "")
-    suffix <- ifelse(selected_index < length(condition_parts), condition_parts[selected_index + 1], "")
-    
-    if (prefix != "" && suffix != "") {
-      # Case: Condition is surrounded by prefix and suffix
-      regex_pattern <- paste0(".*_", prefix, "_(.*?)_", suffix, "_.*")
-    } else if (prefix == "") {
-      # Case: Condition is at the beginning
-      regex_pattern <- paste0("^(.*?)_", suffix, "_.*")
-    } else if (suffix == "") {
-      # Case: Condition is at the end
-      regex_pattern <- paste0(".*_", prefix, "_(.*?)$")
-    } else {
-      # Edge case: Condition is the only thing in the Well_ID
-      regex_pattern <- paste0("^(.*?)$")
+      condition_parts <- unlist(strsplit(conds[i], "_"))  # Split by "_"
+      
+      # Look for the selected condition(s) in the split text
+      match_index <- which(condition_parts %in% input$condition_input)
+      
+      if (length(match_index) > 0) {
+        for (index in match_index) {
+          # Find neighboring text
+          prefix <- if (index > 1) condition_parts[index - 1] else ""
+          suffix <- if (index < length(condition_parts)) condition_parts[index + 1] else ""
+          
+          # Construct regex pattern dynamically
+          if (prefix != "" && suffix != "") {
+            pattern <- paste0(".*_", prefix, "_(.*?)_", suffix, "_.*")
+          } else if (prefix == "") {
+            pattern <- paste0("^(.*?)_", suffix, "_.*")
+          } else if (suffix == "") {
+            pattern <- paste0(".*_", prefix, "_(.*?)$")
+          } else {
+            pattern <- paste0("^(.*?)$")
+          }
+          
+          # Extract using regex
+          extracted_value <- gsub(pattern, "\\1", conds[i])
+          
+          # Save extracted value
+          extracted_conditions[i] <- extracted_value
+        }
+      }
     }
     
-    df$Condition <- gsub(regex_pattern,"\\1", df$Condition)
+    # Update Condition column
+    df$Condition <- extracted_conditions
     
-    unique_values <- unique(df$Condition)
-    test_text(regex_pattern)
-    structured_data(df)
+    structured_data(df)  # Update the dataframe
   })
   
   
@@ -243,6 +270,33 @@ server <- function(input, output, session) {
   })
   
   
+  observe({
+    req(structured_data())  # Ensure the dataframe exists
+    
+    # Extract "Well_ID" column
+    well_col <- structured_data()$Well_ID
+    
+    # Ensure there are valid well IDs to process
+    if (length(well_col) == 0 || all(is.na(well_col))) {
+      return()
+    }
+    
+    # Extract all well identifiers using regex pattern (Letter followed by a number)
+    extracted_wells <- unique(unlist(regmatches(well_col, gregexpr("[A-Za-z]\\d+", well_col))))
+    
+    # If wells were found, update the reactive value
+    if (length(extracted_wells) > 0) {
+      wells(sort(extracted_wells))  # Sort alphabetically (optional)
+    }
+  })
+  
+  # Update the select input for wells
+  observe({
+    req(wells())
+    updateSelectInput(session, "well_input", choices = wells())
+  })
+  
+  # Extract Well ID based on user input
   observeEvent(input$confirm, {
     req(structured_data(), input$well_input)  # Ensure data and selection exist
     
@@ -250,51 +304,8 @@ server <- function(input, output, session) {
     
     if (!"Well_ID" %in% names(df)) return()  # Ensure Well_ID column exists
     
-    # Extract all Well_IDs
-    well_ids <- na.omit(df$Well_ID)
-    
-    # Split each Well_ID into its parts
-    split_wells <- strsplit(well_ids, "_")
-    
-    # Find all occurrences of the selected condition and collect surrounding words
-    prefix_list <- c()
-    suffix_list <- c()
-    
-    for (parts in split_wells) {
-      match_index <- which(parts == input$condition_input)
-      
-      if (length(match_index) > 0) {
-        for (index in match_index) {
-          if (index > 1) {
-            prefix_list <- c(prefix_list, parts[index - 1])
-          }
-          if (index < length(parts)) {
-            suffix_list <- c(suffix_list, parts[index + 1])
-          }
-        }
-      }
-    }
-    
-    # Find the most common prefix and suffix
-    prefix <- if (length(prefix_list) > 0) names(sort(table(prefix_list), decreasing = TRUE))[1] else ""
-    suffix <- if (length(suffix_list) > 0) names(sort(table(suffix_list), decreasing = TRUE))[1] else ""
-    
-    # Construct regex dynamically based on discovered patterns
-    regex_pattern <- if (prefix != "" & suffix != "") {
-      paste0(".*_", prefix, "_(.*?)_", suffix, "_.*")
-    } else if (prefix == "") {
-      paste0("^(.*?)_", suffix, "_.*")
-    } else if (suffix == "") {
-      paste0(".*_", prefix, "_(.*?)$")
-    } else {
-      paste0("^(.*?)$")
-    }
-    
-    #Extract the ID from the well. 
-    
-    
-    # Extract and update the Condition column
-    df$Well_ID <- gsub(regex_pattern, "\\1", df$Well_ID)
+    # Apply regex substitution to extract only the well ID (letter + number)
+    df$Well_ID <- gsub(".*?([A-Za-z]\\d+).*", "\\1", df$Well_ID)
     
     # Update the structured dataframe
     structured_data(df)
