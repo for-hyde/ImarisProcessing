@@ -84,6 +84,7 @@ server <- function(input, output, session) {
     
     #Create empty character vector for of csv_files. 
     csv_files <- c()
+    
     #Iterate through all directories from subfolders list. 
     for(subfolder in subfolders){
       #Append the csv_files list with the csv_files for the iteration of the subfolder. 
@@ -94,14 +95,15 @@ server <- function(input, output, session) {
     #Remove overview csv files. (different size than others)
     csv_files <- csv_files[!grepl("Cells_\\d+_Overall\\.csv", csv_files)]
     
+    #Generate list of nucleus csv_files. 
+    
+    
     #Generate features based on csv files. 
     features <- gsub(".*/Cells_\\d+_(.*)\\.csv", "\\1", csv_files)
     features <- unique(features)
 
     found_features(features)
     
-
-    #Parse CSV_file
     #Create empty dataframe.
     result_df <- data.frame()
     #Create working list
@@ -363,9 +365,11 @@ server <- function(input, output, session) {
       pca_result <- prcomp(df_numeric, center = TRUE, scale. = TRUE)
       result_df <- as.data.frame(pca_result$x[, 1:2])
     } else if (input$chart == "t-SNE") {
+      df_numeric <- scale(df_numeric)
       tsne_result <- Rtsne(df_numeric, dims = 2, perplexity = 30, verbose = FALSE, max_iter = 500)
       result_df <- as.data.frame(tsne_result$Y)
     } else if (input$chart == "UMAP") {
+      df_numeric <- scale(df_numeric)
       umap_result <- umap(df_numeric)
       result_df <- as.data.frame(umap_result$layout)
     }
