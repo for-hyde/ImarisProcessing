@@ -93,13 +93,14 @@ server <- function(input, output, session) {
       )
     }
     #Remove overview csv files. (different size than others)
-    csv_files <- csv_files[!grepl("Cells_\\d+_Overall\\.csv", csv_files)]
+    csv_files <- csv_files[!grepl("Overall\\.csv", csv_files)]
     
     #Generate list of nucleus csv_files. 
-    
+    nucleus_files <- csv_files[grepl("Nucleus", csv_files)]
+    csv_files <- csv_files[!grepl("Nucleus", csv_files)]
     
     #Generate features based on csv files. 
-    features <- gsub(".*/Cells_\\d+_(.*)\\.csv", "\\1", csv_files)
+    features <- gsub(".*(Cell_[^/]+)\\.csv", "\\1", csv_files)
     features <- unique(features)
 
     found_features(features)
@@ -300,7 +301,8 @@ server <- function(input, output, session) {
     }
     
     # Extract all well identifiers using regex pattern (Letter followed by a number)
-    extracted_wells <- unique(unlist(regmatches(well_col, gregexpr("[A-Za-z]\\d+", well_col))))
+    extracted_wells <- unique(unlist(regmatches(well_col, gregexpr("[A-Za-z]\\d+|\\d+[A-Za-z]", well_col))))
+    
     
     # If wells were found, update the reactive value
     if (length(extracted_wells) > 0) {
