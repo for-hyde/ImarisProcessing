@@ -25,7 +25,9 @@ ui <- fluidPage(
       #Select well documentation 
       selectInput("well_input","Select text showing well", choices = NULL),
       #Choose plot to determine
-      selectInput("chart","Type of Dimensionality Reduction", c("PCA","t-SNE","UMAP"), selected = "PCA")
+      selectInput("chart","Type of Dimensionality Reduction", c("PCA","t-SNE","UMAP"), selected = "PCA"),
+      
+      actionButton("confirm", "Confirm selection")
     ),
     
     mainPanel(
@@ -172,11 +174,134 @@ server <- function(input, output, session) {
     
   })
   
+  observeEvent(input$confirm,{
+    req(structured_data(), input$condition_input)
+    df <- structured_data()
+    
+    if(!"Condition" %in% names(df)) return()
+    
+    sample_condition <- na.omit(df$Condition)[1]
+    
+    condition_parts <- unlist(strsplit(sample_condition, "_"))
+    
+    selected_index <- match(input$condition_input, condition_parts)
+    
+    prefix <- ifelse(selected_index > 1, condition_parts[selected_index - 1], "")
+    suffix <- ifelse(selected_index < length(condition_parts), condition_parts[selected_index + 1], "")
+    
+    if (prefix != "" && suffix != "") {
+      # Case: Condition is surrounded by prefix and suffix
+      regex_pattern <- paste0(".*_", prefix, "_(.*?)_", suffix, "_.*")
+    } else if (prefix == "") {
+      # Case: Condition is at the beginning
+      regex_pattern <- paste0("^(.*?)_", suffix, "_.*")
+    } else if (suffix == "") {
+      # Case: Condition is at the end
+      regex_pattern <- paste0(".*_", prefix, "_(.*?)$")
+    } else {
+      # Edge case: Condition is the only thing in the Well_ID
+      regex_pattern <- paste0("^(.*?)$")
+    }
+    
+    df$Condition <- gsub(regex_pattern,"\\1", df$Condition)
+    
+    unique_values <- unique(df$Condition)
+    test_text(regex_pattern)
+    structured_data(df)
+  })
   
   
   # Reaction to selection of well input
 #-------------------------------------------------------------------------------
  #Alter the well_id column of the dataframe to identify the cells individually. 
+  observe({
+    req(structured_data())  # Ensure the dataframe exists
+    
+    well <- structured_data()$Well_ID  # Extract condition column
+    
+    if (length(well) == 0 || all(is.na(well))) {
+      return()  # Exit if there are no valid Well_ID entries
+    }
+    
+    # Extract first non-NA entry safely
+    first_well <- na.omit(well)[1]
+    
+    if (!is.na(first_well) && nzchar(first_well)) {
+      # Split by "_"
+      well_list <- unique(unlist(strsplit(first_well, "_")))
+      
+      # Update the reactive conditions list
+      wells(well_list)
+    }
+  })
+  
+  observe({
+    req(wells())
+    
+    updateSelectInput(session, "well_input", choices = wells())
+    
+  })
+  
+  
+  observeEvent(input$confirm, {
+    req(structured_data(), input$well_input)  # Ensure data and selection exist
+    
+    df <- structured_data()  # Retrieve current dataframe
+    
+    if (!"Well_ID" %in% names(df)) return()  # Ensure Well_ID column exists
+    
+    # Extract all Well_IDs
+    well_ids <- na.omit(df$Well_ID)
+    
+    # Split each Well_ID into its parts
+    split_wells <- strsplit(well_ids, "_")
+    
+    # Find all occurrences of the selected condition and collect surrounding words
+    prefix_list <- c()
+    suffix_list <- c()
+    
+    for (parts in split_wells) {
+      match_index <- which(parts == input$condition_input)
+      
+      if (length(match_index) > 0) {
+        for (index in match_index) {
+          if (index > 1) {
+            prefix_list <- c(prefix_list, parts[index - 1])
+          }
+          if (index < length(parts)) {
+            suffix_list <- c(suffix_list, parts[index + 1])
+          }
+        }
+      }
+    }
+    
+    # Find the most common prefix and suffix
+    prefix <- if (length(prefix_list) > 0) names(sort(table(prefix_list), decreasing = TRUE))[1] else ""
+    suffix <- if (length(suffix_list) > 0) names(sort(table(suffix_list), decreasing = TRUE))[1] else ""
+    
+    # Construct regex dynamically based on discovered patterns
+    regex_pattern <- if (prefix != "" & suffix != "") {
+      paste0(".*_", prefix, "_(.*?)_", suffix, "_.*")
+    } else if (prefix == "") {
+      paste0("^(.*?)_", suffix, "_.*")
+    } else if (suffix == "") {
+      paste0(".*_", prefix, "_(.*?)$")
+    } else {
+      paste0("^(.*?)$")
+    }
+    
+    #Extract the ID from the well. 
+    
+    
+    # Extract and update the Condition column
+    df$Well_ID <- gsub(regex_pattern, "\\1", df$Well_ID)
+    
+    # Update the structured dataframe
+    structured_data(df)
+  })
+  
+  
+  
   
   # 
   output$features <- renderText({
