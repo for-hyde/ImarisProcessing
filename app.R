@@ -10,7 +10,7 @@ library(DT)
 
 # Define the UI
 ui <- fluidPage(
-  titlePanel("Dimensionality Reduction Visualizer"),
+  titlePanel("Imaris Data Processing Application"),
   
   sidebarLayout(
     sidebarPanel(
@@ -45,25 +45,28 @@ ui <- fluidPage(
   )
 )
 
-# Define the server
 server <- function(input, output, session) {
   #Initialize values that are reactive and will change based on input (folder, condition_inputs, )
 #-------------------------------------------------------------------------------  
   #Defines drives available to use. May need to be updated. 
   volumes <- c(Home = fs::path_home(), "C:" = "C:/", "D:" = "D:/", "Z:" = "Z:/")
   
+  #Create a master_data variable for the complete df that will not be after it is initialized. 
   master_data <- reactiveVal(NULL)
-  
   #Data for the dataframe, set to NULL until structured data generated. 
   structured_data <- reactiveVal(NULL)
+  
   #Data for found features, Updated after initial parsing of csv files. 
   found_features <- reactiveVal(NULL)
   
   #Reactive value to be updated after creation of df
   wells <- reactiveVal(NULL)
+  
   #Reactive value to store selected conditions
+  #Initialized as a character vector.
   selected_conditions <- reactiveVal(character())
   
+  #Debugging tool. Intialize as null. 
   test_text <- reactiveVal(NULL)
   
   shinyDirChoose(input, "folder", roots = volumes, session = session)
@@ -97,12 +100,15 @@ server <- function(input, output, session) {
     
     #Generate list of nucleus csv_files. 
     nucleus_files <- csv_files[grepl("Nucleus", csv_files)]
+    #Remove nucleus csv_files from from list. 
+    #Will be updated eventually to allow for nucleus data to also be observed. 
     csv_files <- csv_files[!grepl("Nucleus", csv_files)]
     
     #Generate features based on csv files. 
     features <- gsub(".*(Cell_[^/]+)\\.csv", "\\1", csv_files)
     features <- unique(features)
 
+    #populate found_features with features parsed from csv files. 
     found_features(features)
     
     #Create empty dataframe.
@@ -115,44 +121,47 @@ server <- function(input, output, session) {
     for(i in seq_along(csv_files)){
       #Read CSV
       temp_data <- read.csv(csv_files[i], skip = 3)
-      #Select feature from 
+      #Select feature from feature list.
       feature = features[counter + 1]
       
-      #Extract values from first column as feature
+      #Extract values from first column as values for feature
       temp_list[[feature]] <- temp_data[[1]]
       
-      #IDcolumn
+      #IDcolumn 
       id_col <- temp_data[6]
-      
-      #
-      orig_name <- temp_data[['Original.Image.Name']]
-      
-      wells <- orig_name
-      
-      condition <- orig_name
-      
-      temp_list[["Well_ID"]] <- wells
-      
-      temp_list[["Condition"]] <- condition
-      
       temp_list[["ID"]] <- id_col
       
+      #pull original name column
+      orig_name <- temp_data[['Original.Image.Name']]
+      
+      #Use the column to populate well and condition columns.
+      wells <- orig_name
+      condition <- orig_name
+      temp_list[["Well_ID"]] <- wells
+      temp_list[["Condition"]] <- condition
+
+      #Increment counter
       counter <- counter + 1
       
+      #Once counter has reached the length of the features list
       if(counter >= length(features)){
+        #populate temp_df with the temp_list
         temp_df <- as.data.frame(temp_list)
+        #Add temp_df to result_df
         result_df <- rbind(result_df, temp_df)
+        #Reset temp_list
         temp_list <- list()
+        #Reset counter
         counter <- 0 
       }
         }
+    #Set structured_data and master_df to the generated df.  
     structured_data(result_df)
     master_data(result_df)
     
-    #Use the first entry in the well and condition field to select the data. 
-    #samples <- NA
 })
   
+  #Checks for found features and populates the list of choices that can be used. 
   observe({
     req(found_features())
     
@@ -350,8 +359,9 @@ server <- function(input, output, session) {
     
     # Remove constant columns
     df_numeric <- df_numeric[, apply(df_numeric, 2, function(x) length(unique(x)) > 1), drop = FALSE]
-    
-    
+
+    selected_features <- input$features  # Get selected features from the checkboxGroupInput
+    df_numeric <- df_numeric[, colnames(df_numeric) %in% selected_features, drop = FALSE]
     
     # Ensure valid data
     if (ncol(df_numeric) < 2) {
