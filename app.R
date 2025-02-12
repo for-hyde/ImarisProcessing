@@ -16,8 +16,6 @@ ui <- fluidPage(
     sidebarPanel(
       #Select Folder
       shinyDirButton("folder", "Select Folder", "Choose a folder"),
-      #Debugging
-      textOutput("test"),
       #List identified features to select
       checkboxGroupInput("features", "Select Features to analyze:", choices = NULL),
       #Select cell condition
@@ -25,11 +23,15 @@ ui <- fluidPage(
       #actionButton for text input
       actionButton("add_condition","Add Condition"),
       uiOutput("condition_checkboxes"),
-      
       #Select well documentation 
       selectInput("well_input","Select text showing well", choices = NULL),
+      #Selection to analyze nuclei information or not. 
+      actionButton("table_merge", "Merge Tables?"),
+      
       #Choose plot to determine
       selectInput("chart","Type of Dimensionality Reduction", c("PCA","t-SNE","UMAP"), selected = "PCA"),
+      #Debugging
+      textOutput("test"),
       
       actionButton("confirm", "Confirm selection")
     ),
@@ -37,6 +39,8 @@ ui <- fluidPage(
     mainPanel(
       # Data table of compiled dataframe
       DTOutput("data_table"),
+      
+      DTOutput("nuclear_table"), 
       # Output plot
       uiOutput("dynamicPlot")
       
@@ -56,6 +60,9 @@ server <- function(input, output, session) {
   #Data for the dataframe, set to NULL until structured data generated. 
   structured_data <- reactiveVal(NULL)
   
+  #Create a data_frame for nuclear data.
+  nuclear_data <- reactiveVal(NULL)
+  
   #Data for found features, Updated after initial parsing of csv files. 
   found_features <- reactiveVal(NULL)
   
@@ -70,6 +77,65 @@ server <- function(input, output, session) {
   test_text <- reactiveVal(NULL)
   
   shinyDirChoose(input, "folder", roots = volumes, session = session)
+  
+  #Functions for use throughout application
+#-------------------------------------------------------------------------------  
+  iter_csv <- function(file_list, feature_list){
+    #Empty list
+    temp_list <- list()
+    #Empty dataframe
+    result_df <- data.frame()
+    #Initialized counter. 
+    counter <- 0
+    
+    for(i in seq_along(file_list)){
+      #Read CSV, must skip first 3 lines
+      temp_data <- read.csv(file_list[i], skip = 3)
+      #Select feature from feature list.
+      feature = feature_list[counter + 1]
+      
+      #Extract values from first column as values for feature
+      temp_list[[feature]] <- temp_data[[1]]
+      
+      #IDcolumn 
+      id_col <- temp_data[6]
+      temp_list[["ID"]] <- id_col
+      
+      #pull original name column
+      orig_name <- temp_data[['Original.Image.Name']]
+      
+      #Use the column to populate well and condition columns.
+      wells <- orig_name
+      condition <- orig_name
+      temp_list[["Well_ID"]] <- wells
+      temp_list[["Condition"]] <- condition
+      
+      #Increment counter
+      counter <- counter + 1
+      
+      #Once counter has reached the length of the features list
+      if(counter >= length(feature_list)){
+        #populate temp_df with the temp_list
+        temp_df <- as.data.frame(temp_list)
+        #Add temp_df to result_df
+        result_df <- rbind(result_df, temp_df)
+        #Reset temp_list
+        temp_list <- list()
+        #Reset counter
+        counter <- 0 
+      }
+    }
+    if (identical(deparse(substitute(file_list)), "nucleus_files")){
+      nuclear_data(result_df)
+    }
+    else{
+      #Set structured_data and master_df to the generated df.  
+      structured_data(result_df)
+      master_data(result_df)
+    }
+
+  }
+
 
   #Reaction to selection of folder. 
 #-------------------------------------------------------------------------------
@@ -100,6 +166,8 @@ server <- function(input, output, session) {
     
     #Generate list of nucleus csv_files. 
     nucleus_files <- csv_files[grepl("Nucleus", csv_files)]
+    test_text(nucleus_files)
+    
     #Remove nucleus csv_files from from list. 
     #Will be updated eventually to allow for nucleus data to also be observed. 
     csv_files <- csv_files[!grepl("Nucleus", csv_files)]
@@ -109,55 +177,19 @@ server <- function(input, output, session) {
     features <- unique(features)
 
     #populate found_features with features parsed from csv files. 
-    found_features(features)
     
-    #Create empty dataframe.
-    result_df <- data.frame()
-    #Create working list
-    temp_list <- list()
-    #incrementer set to 0
-    counter <- 0
-    #Iterate csv files
-    for(i in seq_along(csv_files)){
-      #Read CSV
-      temp_data <- read.csv(csv_files[i], skip = 3)
-      #Select feature from feature list.
-      feature = features[counter + 1]
-      
-      #Extract values from first column as values for feature
-      temp_list[[feature]] <- temp_data[[1]]
-      
-      #IDcolumn 
-      id_col <- temp_data[6]
-      temp_list[["ID"]] <- id_col
-      
-      #pull original name column
-      orig_name <- temp_data[['Original.Image.Name']]
-      
-      #Use the column to populate well and condition columns.
-      wells <- orig_name
-      condition <- orig_name
-      temp_list[["Well_ID"]] <- wells
-      temp_list[["Condition"]] <- condition
+    
+    iter_csv(csv_files, features)
+    
+    if(!is.null(nucleus_files) && length(nucleus_files) > 0){
+      nucleus_files <- nucleus_files[!grepl(".*Ratio.csv", nucleus_files)]
+      nuc_features <- gsub(".*(Nucleus_[^/]+)\\.csv$", "\\1", nucleus_files)
+      iter_csv(nucleus_files, nuc_features)
+      test_text(nuc_features)
+      features <- c(features, nuc_features)
+    }
+    found_features(features)
 
-      #Increment counter
-      counter <- counter + 1
-      
-      #Once counter has reached the length of the features list
-      if(counter >= length(features)){
-        #populate temp_df with the temp_list
-        temp_df <- as.data.frame(temp_list)
-        #Add temp_df to result_df
-        result_df <- rbind(result_df, temp_df)
-        #Reset temp_list
-        temp_list <- list()
-        #Reset counter
-        counter <- 0 
-      }
-        }
-    #Set structured_data and master_df to the generated df.  
-    structured_data(result_df)
-    master_data(result_df)
     
 })
   
@@ -172,8 +204,17 @@ server <- function(input, output, session) {
       selected = found_features())
     
   })
-  
-  
+  #Reaction to merging files
+#-------------------------------------------------------------------------------
+  observeEvent(input$table_merge, {
+    req(length(nuclear_data) > 0)
+    comb_df <- merge(nuclear_data(), master_data(), by.x = c("CellID", "Condition"),
+                     by.y = c("ID","Condition"), all.x = TRUE)
+    
+    structured_data(comb_df)
+    #Clear nuclear dataframe
+    nuclear_data(data.frame())
+    })
   
   # Reaction to selection from condition input
 #-------------------------------------------------------------------------------
@@ -339,6 +380,8 @@ server <- function(input, output, session) {
     # Update the structured dataframe
     structured_data(df)
   })
+  
+  
   #Creation of the PCA, UMAP, and t-SNE graphs. 
 #-------------------------------------------------------------------------------
   # Reactive trigger for generating the plot only when "Confirm" is clicked
@@ -416,6 +459,11 @@ server <- function(input, output, session) {
   output$test <- renderText({
     req(test_text())
     paste("Value from test:", test_text())
+  })
+  
+  output$nuclear_table <- renderDT({
+    req(nuclear_data())
+    datatable(nuclear_data(), options = list (pageLength = 10, autowidth = TRUE))
   })
 
   
