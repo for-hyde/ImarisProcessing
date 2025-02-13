@@ -166,7 +166,6 @@ server <- function(input, output, session) {
     
     #Generate list of nucleus csv_files. 
     nucleus_files <- csv_files[grepl("Nucleus", csv_files)]
-    test_text(nucleus_files)
     
     #Remove nucleus csv_files from from list. 
     #Will be updated eventually to allow for nucleus data to also be observed. 
@@ -185,7 +184,6 @@ server <- function(input, output, session) {
       nucleus_files <- nucleus_files[!grepl(".*Ratio.csv", nucleus_files)]
       nuc_features <- gsub(".*(Nucleus_[^/]+)\\.csv$", "\\1", nucleus_files)
       iter_csv(nucleus_files, nuc_features)
-      test_text(nuc_features)
       features <- c(features, nuc_features)
     }
     found_features(features)
@@ -212,6 +210,7 @@ server <- function(input, output, session) {
                      by.y = c("ID","Condition"), all.x = TRUE)
     
     structured_data(comb_df)
+    master_data(comb_df)
     #Clear nuclear dataframe
     nuclear_data(data.frame())
     })
